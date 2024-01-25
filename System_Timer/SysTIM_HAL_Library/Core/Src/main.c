@@ -86,7 +86,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-
+  uint32_t led_timer = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -96,6 +96,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if ((HAL_GetTick() - led_timer) >= 1000)
+	  {
+		  led_timer = HAL_GetTick();
+		  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  }
   }
   /* USER CODE END 3 */
 }

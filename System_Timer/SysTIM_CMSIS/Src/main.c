@@ -19,56 +19,22 @@
 #include "stm32f1xx.h"
 #include "main.h"
 
-#define HCLK_FREQ	16000000U
+#define HCLK_FREQ	8000000U
+
+static inline __attribute__((always_inline)) void SystemClock_Config(void);
+
+static inline __attribute__((always_inline)) void SystemTIM_Init(void);
+
+void SystemInit();
 
 volatile uint32_t sys_mcount = 0;
-void SysTick_Handler(void)
-{
-	sys_mcount = sys_mcount + 1;
-}
+void SysTick_Handler(void);
+
+void GPIO_Init();
 
 int main()
 {
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
-	RCC->APB1ENR |= RCC_APB1ENR_PWREN;
-
-	/* System interrupt init*/
-	NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
-
-	/* SysTick_IRQn interrupt configuration */
-	NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),15, 0));
-
-	/* NOJTAG: JTAG-DP Disabled and SW-DP Enabled */
-	MODIFY_REG(AFIO->MAPR, AFIO_MAPR_SWJ_CFG, AFIO_MAPR_SWJ_CFG_JTAGDISABLE);
-
-	/* System Clock Configuration */
-	/* Enable HSE 8MHz and wait till HSE is ready */
-	RCC->CR |= RCC_CR_HSEON;
-	while(READ_BIT(RCC->CR, RCC_CR_HSERDY) == (RCC_CR_HSERDY));
-	/* Set AHB Prescaler DIV1 */
-	MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, RCC_CFGR_HPRE_DIV1);
-	/* Set APB1 Prescaler DIV1 */
-	MODIFY_REG(RCC->CFGR, RCC_CFGR_PPRE1, RCC_CFGR_PPRE1_DIV1);
-	/* Set APB2 Prescaler DIV1 */
-	MODIFY_REG(RCC->CFGR, RCC_CFGR_PPRE2, RCC_CFGR_PPRE2_DIV1);
-	/* Set System Clock Source HSE and wait till System clock is ready*/
-	MODIFY_REG(RCC->CFGR, RCC_CFGR_SW, RCC_CFGR_SW_HSE);
-
-    SysTick->LOAD  = (uint32_t)((HCLK_FREQ/1000U) - 1UL);             /* set reload register */
-    NVIC_SetPriority (SysTick_IRQn, (1UL << __NVIC_PRIO_BITS) - 1UL); /* set Priority for Systick Interrupt */
-    SysTick->VAL   = 0UL;                                             /* Load the SysTick Counter Value */
-    SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk |
-                     SysTick_CTRL_TICKINT_Msk   |
-                     SysTick_CTRL_ENABLE_Msk;
-	/* GPIO Init */
-	/* GPIO Ports A,C,D Clock Enable */
-	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
-	RCC->APB2ENR |= RCC_APB2ENR_IOPDEN;
-	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
-
-	GPIOC->CRH = GPIO_CRH_MODE13_1;
-    GPIOC->ODR = 0;
+	GPIO_Init();
 
 	uint32_t led_timer = 0;
 
@@ -82,13 +48,68 @@ int main()
 	}
 }
 
+static inline __attribute__((always_inline)) void SystemClock_Config()
+{
+	/* System Clock Configuration */
+	/* Enable HSE 8MHz and wait till HSE is ready */
+	RCC->CR |= RCC_CR_HSEON; /* HSE: 8MHz */
+	while ((RCC->CR & RCC_CR_HSERDY_Msk) != RCC_CR_HSERDY);
+	/* Set AHB Prescaler DIV1 */
+	RCC->CFGR |= RCC_CFGR_HPRE_Msk & RCC_CFGR_HPRE_DIV1;	/* AHB_CLK: 8MHz */
+	/* Set APB1 Prescaler DIV1 */
+	RCC->CFGR |= RCC_CFGR_PPRE1_Msk & RCC_CFGR_PPRE1_DIV1;	/* APB1_CLK: 8MHz */
+	/* Set APB2 Prescaler DIV1 */
+	RCC->CFGR |= RCC_CFGR_PPRE2_Msk & RCC_CFGR_PPRE2_DIV1;	/* APB2_CLK: 8MHz */
+	/* Set System Clock Source HSE and wait till System clock is ready*/
+	RCC->CFGR |= RCC_CFGR_SW_Msk & RCC_CFGR_SW_HSE;			/* Cortex System_CLK: 8MHz */
+	while ((RCC->CFGR & RCC_CFGR_SWS_Msk) != RCC_CFGR_SWS_HSE);
+}
+
+static inline __attribute__((always_inline)) void SystemTIM_Init()
+{
+    SysTick->LOAD  = (uint32_t)((HCLK_FREQ/1000U) - 1UL);             	/* set reload register */
+    NVIC_SetPriority (SysTick_IRQn, (1UL << __NVIC_PRIO_BITS) - 1UL); 	/* set Priority for Systick Interrupt */
+    SysTick->VAL   = 0UL;                                             	/* Load the SysTick Counter Value */
+    SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk |
+                     SysTick_CTRL_TICKINT_Msk   |
+                     SysTick_CTRL_ENABLE_Msk;							/* Enable System Timer */
+}
+
+void SystemInit()
+{
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
+	RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+
+	/* System interrupt init*/
+	NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
+
+	/* NOJTAG: JTAG-DP Disabled and SW-DP Enabled */
+	AFIO->MAPR |= 	AFIO_MAPR_SWJ_CFG_1;
+
+	SystemClock_Config();
+	SystemTIM_Init();
+}
+
+void SysTick_Handler(void)
+{
+	sys_mcount = sys_mcount + 1;
+}
+
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+  while (1);
+}
+
+void GPIO_Init()
+{
+	/* GPIO Init */
+	/* GPIO Ports A,C,D Clock Enable */
+	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
+	RCC->APB2ENR |= RCC_APB2ENR_IOPDEN;
+	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
+
+	GPIOC->CRH = GPIO_CRH_MODE13_1;
+    GPIOC->ODR = 0;
 }
